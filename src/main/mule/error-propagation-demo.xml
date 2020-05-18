@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="f5a1b7cb-70eb-41cb-bb50-7937966ace58" >
+		<http:listener-connection host="0.0.0.0" port="8088" />
+	</http:listener-config>
+	<http:request-config name="HTTP_Request_configuration" doc:name="HTTP Request configuration" doc:id="915086b4-4634-4d08-b45a-5044bcac349f" basePath="api/timezone" >
+		<http:request-connection host="worldtimeapi.org" />
+	</http:request-config>
+	<http:request-config name="HTTP_Request_configuration1" doc:name="HTTP Request configuration" doc:id="ad1ede95-7566-48d9-b95e-97cd9d207e0e" >
+		<http:request-connection host="localhost" port="8088" />
+	</http:request-config>
+	<flow name="system-api-Flow" doc:id="087dd153-26d8-4fc1-bf89-896b5b3f5263" >
+		<http:listener doc:name="Listener" doc:id="8c498dce-f321-4925-b749-d007626140c7" config-ref="HTTP_Listener_config" path="/system-api/{region}/{city}">
+			<http:response statusCode="#[vars.statusCode]" />
+		</http:listener>
+		<logger level="INFO" doc:name="Logger" doc:id="9e6fc5cc-b54f-4d52-90e1-07a8b7053eab" message="Api successfull"/>
+		<http:request method="GET" doc:name="Request" doc:id="c504441e-ca39-44f7-889b-ece41609f453" config-ref="HTTP_Request_configuration" path="/{region}/{city}">
+			<http:uri-params ><![CDATA[#[output application/java
+---
+{
+	"region" : attributes.uriParams.region,
+	"city" : attributes.uriParams.city
+}]]]></http:uri-params>
+		</http:request>
+		<ee:transform doc:name="Transform Message" doc:id="0f6958eb-3e49-41b1-8d04-70ef3963d2e7" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+ status: "Success",
+ errorDescription: "",
+ message: payload
+}
+]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<error-handler >
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="05d0486e-b773-4582-952b-fcac65c6f125" type="HTTP:BAD_REQUEST, HTTP:CLIENT_SECURITY, HTTP:CONNECTIVITY, HTTP:FORBIDDEN, HTTP:INTERNAL_SERVER_ERROR, HTTP:METHOD_NOT_ALLOWED, HTTP:NOT_ACCEPTABLE, HTTP:PARSING, HTTP:RETRY_EXHAUSTED, HTTP:SECURITY, HTTP:SERVICE_UNAVAILABLE, HTTP:TIMEOUT, HTTP:TOO_MANY_REQUESTS, HTTP:UNAUTHORIZED, HTTP:UNSUPPORTED_MEDIA_TYPE, EXPRESSION, STREAM_MAXIMUM_SIZE_EXCEEDED">
+				<logger level="INFO" doc:name="Logger" doc:id="ae1fe638-739d-464d-92bf-c2f6f7de7d86" message="Error Occured"/>
+				<ee:transform doc:name="Transform Message" doc:id="1a0f8935-9d8d-4996-8bfc-454003039d8c" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	status: "Error",
+	errorCode: error.errorType.identifier,
+	errorMessage:error.description,
+	httpStatusCode:error.errorMessage.attributes."statusCode"
+}]]></ee:set-payload>
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="statusCode" ><![CDATA[%dw 2.0
+output application/java
+---
+500]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+				<set-payload value="#[payload]" doc:name="Set Payload" doc:id="dab32cc0-05aa-442d-9191-b0ac6c3e4a2e" />
+			</on-error-continue>
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="40b7a8a7-7cab-45dd-b796-55fcd0da276a" type="HTTP:NOT_FOUND">
+				<logger level="INFO" doc:name="Logger" doc:id="3ba970d0-fcbe-4fef-a88a-4a74617fc23c" message="NOT FOUND OCCURED LOVISH"/>
+				<set-variable value='#[error.errorMessage.attributes."statusCode"]' doc:name="Set Variable" doc:id="835ad639-9a15-46c0-b323-d878bd5feea9" variableName="httpStatusCode"/>
+				<choice doc:name="Choice" doc:id="6920c7b6-bb0a-41d3-8801-830eab1521c5" >
+					<when expression="#[error.cause.localizedMessage== &quot;HTTP GET on resource 'http://worldtimeapi.org:80/api/timezone/Asia/Kolkataww' failed: not found (404).&quot;]">
+						<ee:transform doc:name="Transform Message" doc:id="267e50d1-eb15-4047-b0b7-5d449bff31e7" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	name: "lovish"
+}]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+					</when>
+					<otherwise >
+						<ee:transform doc:name="Transform Message" doc:id="31e20693-6567-48c0-bb80-ac57d04b74de" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	name:"nikhil"
+}]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+					</otherwise>
+				</choice>
+			</on-error-continue>
+		</error-handler>
+	</flow>
+	<flow name="error-propagation-demoFlow" doc:id="ac509b29-349f-4860-bdb4-9b95c9711f7d" >
+		<http:listener doc:name="Listener" doc:id="ac3f0b9f-7ec5-4666-a700-b09af18698a7" config-ref="HTTP_Listener_config" path="/experience-api/{region}/{city}"/>
+		<logger level="INFO" doc:name="Logger" doc:id="2930cded-d222-4dee-86f2-192fa0bb88b8" message="Api invocation successfull"/>
+		<try doc:name="Try" doc:id="f9276be1-b3f4-4ece-90f5-6b693c49abdd" >
+			<http:request method="GET" doc:name="Request" doc:id="8ef45f74-804d-4476-9077-4a92007b6c06" config-ref="HTTP_Request_configuration1" path="/system-api/{region}/{city}">
+			<http:uri-params><![CDATA[#[output application/java
+---
+{
+	"region" : attributes.uriParams.region,
+	"city" : attributes.uriParams.city
+}]]]></http:uri-params>
+		</http:request>
+			<error-handler >
+				<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="50d1aa59-d9e9-4681-82aa-0a6bdb7e072d" >
+					<logger level="INFO" doc:name="Logger" doc:id="cf1d3e31-6e39-473c-a1b7-9b4b1081ac20" message="Error Ocured"/>
+					<ee:transform doc:name="Transform Message" doc:id="4a636470-c62c-4aba-8bad-bc6ce747a25c" >
+						<ee:message >
+							<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	status:"failure",
+	errorCode:"connectivityError",
+	errorMessage: "Temporary Connection Error"}]]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+				</on-error-continue>
+			</error-handler>
+		</try>
+	</flow>
+</mule>
